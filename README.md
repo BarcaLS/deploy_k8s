@@ -23,10 +23,10 @@ This project automates the installation of a production-ready, 3-node Vanilla Ku
 * Adjust inventory.ini and groups_vars/all.ini to suit your needs.
 * Run the Ansible playbook to configure all nodes and bootstrap the cluster: ./deploy_k8s.sh
 
---- PROJECT STRUCTURE ---
-    inventory.ini    : Defines IPs, roles, and SSH settings.
-    site.yml         : The main orchestrator file.
-    group_vars/      : Holds global configuration (like K3s version).
-    roles/common/    : Prepares OS and prerequisites.
-    roles/k8s_master/: Installs master node and generates connection tokens.
-    roles/k8s_worker/: Joins worker nodes to the master.
+## Project structure
+* inventory.ini    : Defines IPs, roles, and SSH settings.
+* site.yml         : The main orchestrator file.
+* group_vars/      : Holds global configuration (like K3s version).
+* roles/common/    : Prepares OS and prerequisites.
+* roles/k8s_master/: Installs master node and generates connection tokens.
+* roles/k8s_worker/: Joins worker nodes to the master.
