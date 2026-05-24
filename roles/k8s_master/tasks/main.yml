@@ -1,0 +1,58 @@
+---
+- name: Install Vanilla K8s packages (Matching Version Channel)
+  apt:
+    name:
+      - "kubelet={{ k8s_version | replace('v', '') }}.*"
+      - "kubeadm={{ k8s_version | replace('v', '') }}.*"
+      - "kubectl={{ k8s_version | replace('v', '') }}.*"
+    state: present
+    update_cache: yes
+
+- name: Prevent Kubernetes packages from being upgraded automatically
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: [kubelet, kubeadm, kubectl]
+
+- name: Check if Kubernetes Control Plane is already initialized
+  stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeconfig_check
+
+- name: Initialize Kubernetes Control Plane
+  shell: |
+    kubeadm init \
+      --pod-network-cidr={{ k8s_cluster_cidr }} \
+      --apiserver-advertise-address={{ ansible_default_ipv4.address }} \
+      --node-name={{ inventory_hostname }}
+  when: not kubeconfig_check.stat.exists
+  register: kubeadm_init
+
+- name: Create .kube directory for root
+  file:
+    path: /root/.kube
+    state: directory
+    mode: '0755'
+
+- name: Copy admin.conf to root .kube
+  copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /root/.kube/config
+    remote_src: yes
+    mode: '0600'
+  when: not kubeconfig_check.stat.exists or (kubeadm_init is changed)
+
+- name: Force strict allocation of your routed /22 CIDR to Master node
+  shell: |
+    kubectl get node {{ inventory_hostname }} -o json | \
+    jq '.spec.podCIDR = "{{ routed_cidr }}" | .spec.podCIDRs = ["{{ routed_cidr }}"]' | \
+    kubectl replace --force -f -
+  failed_when: false
+
+- name: Generate join command for workers
+  shell: kubeadm token create --print-join-command
+  register: join_command_raw
+
+- name: Set join command as fact for the entire playbook
+  set_fact:
+    k8s_join_command: "{{ join_command_raw.stdout }}"

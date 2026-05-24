@@ -1,0 +1,49 @@
+---
+- name: Install system prerequisites and containerd
+  apt:
+    update_cache: yes
+    name:
+      - curl
+      - apt-transport-https
+      - ca-certificates
+      - containerd
+    state: present
+
+- name: Disable and stop UFW (AWS manages firewall)
+  systemd:
+    name: ufw
+    state: stopped
+    enabled: no
+
+- name: Configure containerd (Generate default config)
+  shell: |
+    mkdir -p /etc/containerd
+    containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+  register: containerd_conf
+
+- name: Enable SystemdCgroup in containerd
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'SystemdCgroup = false'
+    replace: 'SystemdCgroup = true'
+  notify: Restart containerd
+
+- name: Ensure apt keyrings directory exists
+  file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+
+- name: Download Kubernetes repository signing key
+  get_url:
+    url: "https://pkgs.k8s.io/core:/stable:/{{ k8s_version }}/deb/Release.key"
+    dest: /etc/apt/keyrings/kubernetes-apt-keyring.asc
+    mode: '0644'
+
+- name: Add official Kubernetes apt repository
+  apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.asc] https://pkgs.k8s.io/core:/stable:/{{ k8s_version }}/deb/ /"
+    state: present
+    filename: kubernetes

@@ -1,0 +1,42 @@
+---
+- name: Prepare all machines
+  hosts: k8s_cluster
+  become: yes
+  roles:
+    - common
+
+- name: Configure Control Plane (Master)
+  hosts: masters
+  become: yes
+  roles:
+    - k8s_master
+
+- name: Configure Worker Nodes
+  hosts: workers
+  become: yes
+  roles:
+    - k8s_worker
+
+- name: Deploy Cluster Network (Flannel host-gw)
+  hosts: masters
+  become: yes
+  tasks:
+    - name: Download official Flannel manifest
+      get_url:
+        url: https://github.com/flannel-io/flannel/releases/latest/download/kube-flannel.yml
+        dest: /tmp/kube-flannel.yml
+
+    - name: Switch Flannel from vxlan to host-gw
+      replace:
+        path: /tmp/kube-flannel.yml
+        regexp: '"Type":\s*"vxlan"'
+        replace: '"Type": "host-gw"'
+
+    - name: Configure Flannel to use the custom Cluster CIDR
+      replace:
+        path: /tmp/kube-flannel.yml
+        regexp: '"Network":\s*"10\.244\.0\.0/16"'
+        replace: '"Network": "{{ k8s_cluster_cidr }}"'
+
+    - name: Apply Flannel manifest via native kubectl
+      shell: kubectl apply -f /tmp/kube-flannel.yml

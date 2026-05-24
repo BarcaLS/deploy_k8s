@@ -1,0 +1,4 @@
+---
+k8s_version: "v1.36"
+k8s_cluster_cidr: "192.168.48.0/20"
+local_kubeconfig_path: "./kubeconfig.yaml"

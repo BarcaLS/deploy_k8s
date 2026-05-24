@@ -1,0 +1,27 @@
+---
+- name: Install Vanilla K8s packages on Worker (Matching Version Channel)
+  apt:
+    name:
+      - "kubelet={{ k8s_version | replace('v', '') }}.*"
+      - "kubeadm={{ k8s_version | replace('v', '') }}.*"
+      - "kubectl={{ k8s_version | replace('v', '') }}.*"
+    state: present
+    update_cache: yes
+
+- name: Prevent Kubernetes packages from being upgraded automatically
+  dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop: [kubelet, kubeadm, kubectl]
+
+- name: Join Worker to the cluster
+  shell: "{{ hostvars[groups['masters'][0]]['k8s_join_command'] }} --node-name {{ inventory_hostname }}"
+  register: worker_join
+  failed_when: "'This node has joined the cluster' not in worker_join.stdout and 'already exists' not in worker_join.stderr"
+
+- name: Force inject custom routed /22 CIDR into Worker bypassing K8s API locks
+  delegate_to: "{{ groups['masters'][0] }}"
+  shell: |
+    kubectl get node {{ inventory_hostname }} -o json | \
+    jq '.spec.podCIDR = "{{ routed_cidr }}" | .spec.podCIDRs = ["{{ routed_cidr }}"]' | \
+    kubectl replace --force -f -
